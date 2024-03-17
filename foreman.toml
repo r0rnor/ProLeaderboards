@@ -4,3 +4,4 @@ remodel = { source = "rojo-rbx/remodel", version = "0.11.0" }
 selene = { github = "Kampfkarren/selene", version = "0.26.1"}
 stylua = { github = "JohnnyMorganz/StyLua", version = "0.20.0"}
 rbxcloud = { github = "Sleitnick/rbxcloud", version = "0.6.1" }
+wally = { github = "UpliftGames/wally", version = "0.3.2"}

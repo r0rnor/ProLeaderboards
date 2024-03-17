@@ -4,8 +4,23 @@
     "$className": "DataModel",
 
     "ReplicatedStorage": {
-      "$path": "src/shared",
-      "$ignoreUnknownInstances": true
+      "ProLeaderboards": {
+        "$className": "Folder",
+        "$path": "src/ReplicatedStorage",
+        "$ignoreUnknownInstances": true
+      },
+      "Packages": {
+        "$className": "Folder",
+        "$path": "Packages",
+        "$ignoreUnknownInstances": true
+      }
+    },
+
+    "ServerScriptService": {
+      "Server": {
+        "$className": "Folder",
+        "$path": "src/ServerScriptService"
+      }
     },
 
     "Workspace": {
