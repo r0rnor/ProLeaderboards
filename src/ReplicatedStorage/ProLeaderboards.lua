@@ -57,6 +57,8 @@ function ProLeaderboards.GetPages(self: Leaderboard)
 		end
 	until Pages.IsFinished
 
+	print(ResultPages)
+
 	return ResultPages
 end
 
