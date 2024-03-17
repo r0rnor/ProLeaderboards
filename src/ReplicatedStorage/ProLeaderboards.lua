@@ -47,23 +47,27 @@ function ProLeaderboards.GetPages(self: Leaderboard)
 
 	local Pages = self.DataStore:GetSortedAsync(self.PageSettings.Ascending, self.PageSettings.PageSize, self.PageSettings.MinValue, self.PageSettings.MaxValue)
 
-	while true do
+	repeat
 		local Entries = Pages:GetCurrentPage()
 
 		table.insert(ResultPages, Entries)
 
-		if Pages.IsFinished then
-			break
-		else
+		if not Pages.IsFinished then
 			Pages:AdvanceToNextPageAsync()
 		end
-	end
+	until Pages.IsFinished
 
 	return ResultPages
 end
 
-function ProLeaderboards.SetValue(Leaderboard: Leaderboard, Player: Player, NewValue: any)
-	Leaderboard.DataStore:SetAsync(Player.UserId, NewValue)
+function ProLeaderboards.SetValue(self: Leaderboard, Player: Player, NewValue: any)
+	self.DataStore:SetAsync(Player.UserId, NewValue)
+end
+
+function ProLeaderboards.ConnectValueInstance(self: Leaderboard, Player: Player, ValueInstance: ValueBase)
+	ValueInstance.Changed:Connect(function()
+		ProLeaderboards.SetValue(self, Player, ValueInstance.Value)
+	end)
 end
 
 return ProLeaderboards
