@@ -42,6 +42,8 @@ function ProLeaderboards.new(DataStoreName: string?, UpdateTime: number?, PageSe
 	self.PageSettings.Ascending = self.PageSettings.Ascending or false
 	self.PageSettings.PageSize = self.PageSettings.PageSize and math.clamp(self.PageSettings.PageSize, 0, 100) or 100
 
+	--a
+
 	local CurrentTime = 0
 	RunService.Heartbeat:Connect(function(deltaTime)
 		CurrentTime += deltaTime
