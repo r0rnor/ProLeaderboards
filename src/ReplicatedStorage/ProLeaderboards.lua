@@ -19,7 +19,9 @@ export type UISettings = {
 export type Leaderboard = {
 	DataStore: OrderedDataStore,
 	DataStoreName: string,
-	UpdateTime: number,
+	ReloadTime: number,
+	UpdateTime : number,
+	UpdateType : "All-Time" | "Regular",
 	PageSettings: PageSettings,
 
 	UpdateUI: RBXScriptSignal,
@@ -30,24 +32,24 @@ export type Leaderboard = {
 local ProLeaderboards = {}
 ProLeaderboards.__index = ProLeaderboards
 
-function ProLeaderboards.new(DataStoreName: string?, UpdateTime: number?, PageSettings : PageSettings?)
+function ProLeaderboards.new(DataStoreName: string?, ReloadTime: number?, PageSettings : PageSettings?, UpdateTime : number?)
 	local self: Leaderboard = setmetatable({}, ProLeaderboards)
 
 	self.DataStoreName = DataStoreName or "Basic"
 	self.DataStore = DataStoreService:GetOrderedDataStore(self.DataStoreName)
-	self.UpdateTime = UpdateTime or 60
+	self.ReloadTime = ReloadTime or 60
+	self.UpdateTime = UpdateTime or -1
+	self.UpdateType = self.UpdateTime > 0 and "Regular" or "All-Time"
 	self.UpdateUI = Signal.new()
 
 	self.PageSettings = PageSettings or {Ascending = false, PageSize = 100}
 	self.PageSettings.Ascending = self.PageSettings.Ascending or false
 	self.PageSettings.PageSize = self.PageSettings.PageSize and math.clamp(self.PageSettings.PageSize, 0, 100) or 100
 
-	--a
-
 	local CurrentTime = 0
 	RunService.Heartbeat:Connect(function(deltaTime)
 		CurrentTime += deltaTime
-		if CurrentTime < self.UpdateTime then return end
+		if CurrentTime < self.ReloadTime then return end
 		CurrentTime = 0
 		self.UpdateUI:Fire(self:GetPages(1)[1])
 	end)
@@ -99,6 +101,23 @@ function ProLeaderboards:ConnectValue(Player: Player | string, ValueInstance: Va
 	ValueInstance.Changed:Connect(function()
 		self:SetValue(Player, ValueInstance.Value)
 	end)
+end
+
+function ProLeaderboards:ConnectDictionaryValue(Player : Player | string, Table : {}, Key : string)
+	local self: Leaderboard = self
+
+	self:SetValue(Player, Table[Key])
+
+	local MetaTable = {}
+	MetaTable.__newindex = function(_, MetaKey, MetaValue)
+		if MetaKey ~= Key then return end
+
+		print(MetaKey, MetaValue)
+
+		self:SetValue(Player, MetaValue)
+	end
+
+	setmetatable(Table, MetaTable)
 end
 
 return ProLeaderboards
