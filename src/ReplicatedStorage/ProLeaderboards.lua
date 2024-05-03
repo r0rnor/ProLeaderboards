@@ -1,5 +1,6 @@
 -- stylua: ignore start
 local DataStoreService = game:GetService("DataStoreService")
+local RunService = game:GetService("RunService")
 
 
 export type TimeDataStore = {
@@ -10,29 +11,74 @@ export type TimeDataStore = {
 export type Leaderboard = {
 	globalKey : string,
 	allTimeDataStore : OrderedDataStore,
-	dataStores : {
+	timeDataStores : {
 		[string] : TimeDataStore
 	}
 }
+
+
+local function updateTimeDataStores(self : Leaderboard, deltaValue : number, key : string)
+	for _, timeDataStore in self.timeDataStores do
+		timeDataStore.data:UpdateAsync(key, function(timeOldValue)
+			return if timeOldValue then deltaValue + timeOldValue else 0
+		end)
+	end
+end
 
 
 local ProLeaderboards = {}
 ProLeaderboards.__index = ProLeaderboards
 
 
-function ProLeaderboards.new(globalKey : string)
-	local self = setmetatable({}, ProLeaderboards)
+function ProLeaderboards.new(globalKey : string, updateTime : number?, startTime : number?)
+	local startTime = startTime or 0
+	local updateTime = updateTime or 60
+
+	local self : Leaderboard = setmetatable({}, ProLeaderboards)
 
 	self.globalKey = globalKey
-	self.allTimeDataStore = DataStoreService:GetOrderedDataStore(globalKey)
+	self.allTimeDataStore = DataStoreService:GetOrderedDataStore(self.globalKey.."All-Time", 1)
+	self.timeDataStores = {}
+
+	local currentTime = startTime
+	RunService.Heartbeat:Connect(function(deltaTime)
+		currentTime += deltaTime
+
+		if currentTime < updateTime then
+			return
+		end
+
+		currentTime = 0
+
+		for storeKey, timeDataStore in self.timeDataStores do
+			local timeIndex = math.floor(os.time() / timeDataStore.resetTime)
+			timeDataStore.data = DataStoreService:GetOrderedDataStore(self.globalKey..storeKey, timeIndex)
+		end
+	end)
 
 	return self
+end
+
+function ProLeaderboards:addDataStore(storeKey : string, resetTime : number)
+	local self : Leaderboard = self
+
+	local timeDataStore : TimeDataStore = {}
+	local timeIndex = math.floor(os.time() / resetTime)
+
+	timeDataStore.resetTime = resetTime
+	timeDataStore.data = DataStoreService:GetOrderedDataStore(self.globalKey..storeKey, timeIndex)
+
+	self.timeDataStores[storeKey] = timeDataStore
 end
 
 function ProLeaderboards:set(key : string, value : number)
 	local self : Leaderboard = self
 	
-	self.allTimeDataStore:UpdateAsync(key, function()
+	self.allTimeDataStore:UpdateAsync(key, function(oldValue)
+		local deltaValue = value - oldValue
+
+		updateTimeDataStores(self, deltaValue, key)
+
 		return value
 	end)
 end
