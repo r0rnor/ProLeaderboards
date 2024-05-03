@@ -1,23 +1,49 @@
 local ProLeaderboards = require(game.ReplicatedStorage.ProLeaderboards.ProLeaderboards)
 
-local Leaderboard = ProLeaderboards.new("CoinsStore", 5, { PageSize = 5 })
+local List = workspace.Leaderboard.SurfaceGui.List
 
-local TestTable = {
-	Coins = 30,
-	Gems = 20,
-	Name = "Topaz228",
-}
+local function CleanList()
+	for _, Frame in List:GetChildren() do
+		if Frame.Name == "Example" or Frame:IsA("UIListLayout") then
+			continue
+		end
 
-Leaderboard:ConnectDictionaryValue("Topaz228", TestTable, "Coins")
+		Frame:Destroy()
+	end
+end
+
+local function CreateFrames(Page: {})
+	for Rank, Info in Page do
+		local Frame = List.Example:Clone()
+		Frame.Name = Rank
+		Frame.Parent = List
+
+		Frame.Key.Text = Info.key
+		Frame.Value.Text = Info.value
+		Frame.Rank.Text = Rank
+
+		Frame.Visible = true
+	end
+end
+
+local Leaderboard = ProLeaderboards.new("CoinsStore", 5, { PageSize = 20 }, 20)
+Leaderboard.UpdateUI:Connect(function(Page: {}, LastCellIndex: number)
+	CleanList()
+	CreateFrames(Page)
+
+	List.Parent.CellIndex.Text = "Cell: " .. LastCellIndex
+end)
+
+local CoinIndex = 1
 
 while true do
 	task.wait(2)
+	CoinIndex += 1
 
-	TestTable.Coins += math.random(-1, 3)
-	print(TestTable)
+	local Key = "Test1"
+	local Value = math.random(1, 4) * CoinIndex
 
-	task.wait(2)
+	print(Key, Value)
 
-	TestTable.Gems += 2
-	print(TestTable)
+	Leaderboard:SetValue(Key, Value)
 end

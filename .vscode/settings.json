@@ -4,6 +4,7 @@
         "editor.formatOnSave": true
     },
     "robloxLsp.diagnostics.disable": [
-        "redefined-local"
+        "redefined-local",
+        "undefined-type"
     ]
 }

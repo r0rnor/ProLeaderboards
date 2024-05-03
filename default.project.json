@@ -11,8 +11,9 @@
       },
       "Packages": {
         "$className": "Folder",
-        "$path": "Packages",
-        "$ignoreUnknownInstances": true
+        "$path": "Packages"
+        
+
       }
     },
 
