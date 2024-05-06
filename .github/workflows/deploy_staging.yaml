@@ -13,7 +13,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
     
-    - uses: LPGhatguy/setup-aftman@v0.2.8
+    - uses: LPGhatguy/setup-aftman
       name: Install Aftman
       with:
           version: "^1.0.0"
