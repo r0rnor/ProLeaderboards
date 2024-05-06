@@ -10,16 +10,16 @@ local scrollingFrames = leaderboardUi.ScrollingFrames
 local switchButton = leaderboardUi.Switch
 local slotTemplate = ReplicatedStorage.Slot
 
-local leaderboard = ProLeaderboards.new("global1", 10, 7)
-leaderboard:addDataStore("minute", 60)
+local leaderboard = ProLeaderboards.new(false, "global1")
+leaderboard:addDataStore("minute", 20)
 
 local coins = 0
 local anyaCoins = 0
 
-leaderboard.updatedLeaderboards:Connect(function()
-	wait(1)
+local function updateUi()
+	for storeKey: string, list in leaderboard:getData() do
+		local leaderboardFrame = scrollingFrames:FindFirstChild(storeKey)
 
-	for _, leaderboardFrame: ScrollingFrame in scrollingFrames:GetChildren() do
 		for _, slot: Frame in leaderboardFrame:GetChildren() do
 			if not slot:IsA("Frame") then
 				continue
@@ -27,14 +27,6 @@ leaderboard.updatedLeaderboards:Connect(function()
 
 			slot:Destroy()
 		end
-
-		local dataStoreKey = leaderboardFrame.Name
-
-		if dataStoreKey == "all-time" then
-			dataStoreKey = nil
-		end
-
-		local list = leaderboard:getPages(dataStoreKey)
 
 		for index, info in pairs(list) do
 			local slot = slotTemplate:Clone()
@@ -45,10 +37,12 @@ leaderboard.updatedLeaderboards:Connect(function()
 			slot.ValueLabel.Text = info.value
 		end
 	end
-end)
+end
 
-leaderboard.resetedDataStore:Connect(function(storeKey: string)
+leaderboard.resetLeaderboard:Connect(function(storeKey: string)
 	print(storeKey, "updated!")
+
+	wait(1)
 end)
 
 switchButton.MouseButton1Click:Connect(function()
@@ -64,6 +58,10 @@ switchButton.MouseButton1Click:Connect(function()
 	scrollingFrames:FindFirstChild(nextType).Visible = true
 end)
 
+leaderboard.timeUpdated:Connect(function(storeKey: string, time: number)
+	print(storeKey, "time now:", time)
+end)
+
 while true do
 	wait(3)
 
@@ -72,4 +70,6 @@ while true do
 
 	leaderboard:set("r0rnor", coins)
 	leaderboard:set("anya<3", anyaCoins)
+
+	updateUi()
 end
