@@ -1,12 +1,10 @@
 -- stylua: ignore start
 local DataStoreService = game:GetService("DataStoreService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 
-local packages = ReplicatedStorage.Packages
-local Signal = require(packages.Signal)
-local Promise = require(packages.Promise)
+local Signal = require(script.Signal)
+local Promise = require(script.Promise)
 
 
 export type PageSettings = {
