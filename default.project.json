@@ -16,13 +16,6 @@
       "$ignoreUnknownInstances": true
     },
 
-    "ServerScriptService": {
-      "Server": {
-        "$className": "Folder",
-        "$path": "src/ServerScriptService"
-      }
-    },
-
     "Workspace": {
       "$ignoreUnknownInstances": true
     }

@@ -2,7 +2,7 @@
 
 ----------------------------------------------------------------------
 --						ProLeaderboards module						--
---						by #r0rnor (discord)						--
+--						by r0rnor (discord)						--
 --	github & docs link: "https://github.com/r0rnor/ProLeaderboards"	--											--
 --																	--
 --	  This module helps creating data stores which are resetting	--
