@@ -1,11 +1,24 @@
 -- stylua: ignore start
+
+----------------------------------------------------------------------
+--						ProLeaderboards module						--
+--						by #r0rnor (discord)						--
+--	github & docs link: "https://github.com/r0rnor/ProLeaderboards"	--											--
+--																	--
+--	  This module helps creating data stores which are resetting	--
+--	    every N seconds (or even are not resetting, this is in		--
+-- all-time data store case). You can use this module for creating, --
+--	    for example, hourly/daily/monthly/all-time leaderboards		--
+--				(P.S. this is my first public module)				--
+----------------------------------------------------------------------
+
+
 local DataStoreService = game:GetService("DataStoreService")
 local RunService = game:GetService("RunService")
 
 
 local Signal = require(script.Signal)
 local Promise = require(script.Promise)
-
 
 export type PageSettings = {
 	ascending : boolean,
