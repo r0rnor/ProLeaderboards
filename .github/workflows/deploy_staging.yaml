@@ -15,9 +15,9 @@ jobs:
     
     - uses: ok-nick/setup-aftman@v0.4.2
       name: Install Aftman
-      with:
-          version: "^1.0.0"
-          token: ${{ SECRETS.GITHUB_TOKEN}}
+      #with:
+      #    version: "^1.0.0"
+      #    token: ${{ SECRETS.GITHUB_TOKEN}}
     
     - run: rojo build -o Game.rbxl
 
