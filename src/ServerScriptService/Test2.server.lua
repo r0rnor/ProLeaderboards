@@ -16,7 +16,9 @@ leaderboard:addDataStore("minute", 60)
 local coins = 0
 local anyaCoins = 0
 
-local function updateLeaderboardUi()
+leaderboard.updatedLeaderboards:Connect(function()
+	wait(1)
+
 	for _, leaderboardFrame: ScrollingFrame in scrollingFrames:GetChildren() do
 		for _, slot: Frame in leaderboardFrame:GetChildren() do
 			if not slot:IsA("Frame") then
@@ -43,20 +45,10 @@ local function updateLeaderboardUi()
 			slot.ValueLabel.Text = info.value
 		end
 	end
-end
-
-leaderboard.updatedLeaderboards:Connect(function()
-	wait(1)
-
-	updateLeaderboardUi()
 end)
 
 leaderboard.resetedDataStore:Connect(function(storeKey: string)
-	wait(1)
-
 	print(storeKey, "updated!")
-
-	updateLeaderboardUi()
 end)
 
 switchButton.MouseButton1Click:Connect(function()

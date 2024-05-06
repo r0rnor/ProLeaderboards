@@ -21,6 +21,17 @@ export type TimeDataStore = {
 	pageSettings : PageSettings,
 }
 
+export type Pages = {
+	[number] : Page
+}
+
+export type Page = {
+	[number] : {
+		key : string,
+		value : number
+	}
+}
+
 export type Leaderboard = {
 	globalKey : string,
 	defaultPageSettings : PageSettings,
@@ -51,7 +62,7 @@ local function connectResetting(self : Leaderboard, startTime : number?, updateT
 		local previousTimeIndex = math.floor((os.time() - updateTime) / dataStore.resetTime)
 
 		if previousTimeIndex ~= timeIndex then
-			self.resetedDataStore:Fire(storeKey, timeIndex, previousTimeIndex)
+			self.resetLeaderboard:Fire(storeKey, timeIndex, previousTimeIndex)
 		end
 
 		dataStore.data = DataStoreService:GetOrderedDataStore(self.globalKey..storeKey, timeIndex)
@@ -79,11 +90,11 @@ end
 local ProLeaderboards = {}
 ProLeaderboards.__index = ProLeaderboards
 
-ProLeaderboards.resetedDataStore = Signal.new()
+ProLeaderboards.resetLeaderboard = Signal.new()
 ProLeaderboards.updatedLeaderboards = Signal.new()
 
 
-function ProLeaderboards.new(globalKey : string, updateTime : number?, startTime : number?, pageSettings : PageSettings?)
+function ProLeaderboards.new(globalKey : string, updateTime : number?, startTime : number?, pageSettings : PageSettings?) : Leaderboard
 	assert(globalKey, "Global key is not provided to .new()")
 
 	local self : Leaderboard = setmetatable({}, ProLeaderboards)
@@ -144,7 +155,7 @@ function ProLeaderboards:set(key : string, value : number)
 	end)
 end
 
-function ProLeaderboards:getPages(storeKey : string?, numberOfPages : number?)
+function ProLeaderboards:getPages(storeKey : string?, numberOfPages : number?) : Pages | Page
 	local self : Leaderboard = self
 	
 	local dataStore = if not storeKey then self.allTimeDataStore else self.timeDataStores[storeKey].data
@@ -152,7 +163,7 @@ function ProLeaderboards:getPages(storeKey : string?, numberOfPages : number?)
 	local numberOfPages = numberOfPages or 1
 
 	local pages = dataStore:GetSortedAsync(pageSettings.ascending, pageSettings.pageSize, pageSettings.minValue, pageSettings.maxValue)
-	local resultPages : {[number] : {[number] : {key : string, value : number}}} = {}
+	local resultPages : Pages = {}
 	local pageIndex = 1
 	local rank = 0
 
