@@ -12,9 +12,8 @@
       "Packages": {
         "$className": "Folder",
         "$path": "Packages"
-        
-
-      }
+      },
+      "$ignoreUnknownInstances": true
     },
 
     "ServerScriptService": {
@@ -25,7 +24,7 @@
     },
 
     "Workspace": {
-      
+      "$ignoreUnknownInstances": true
     }
   }
 }
