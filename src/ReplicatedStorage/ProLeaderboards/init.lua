@@ -12,6 +12,12 @@
 --				(P.S. this is my first public module)				--
 ----------------------------------------------------------------------
 
+--[=[
+	@class ProLeaderboards
+
+	Test
+]=]
+
 
 local DataStoreService = game:GetService("DataStoreService")
 local RunService = game:GetService("RunService")
