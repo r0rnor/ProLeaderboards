@@ -121,6 +121,8 @@ setmetatable(Connection, {
 ]=]
 
 --[=[
+	@ignore
+
 	@class Signal
 
 	Signals allow events to be dispatched and handled.

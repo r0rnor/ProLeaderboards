@@ -43,6 +43,8 @@ local function makeEnum(enumName, members)
 end
 
 --[=[
+	@ignore
+
 	An object to represent runtime errors that occur during execution.
 	Promises that experience an error like this will be rejected with
 	an instance of this object.
@@ -213,6 +215,8 @@ end
 	A Promise is an object that represents a value that will exist in the future, but doesn't right now.
 	Promises allow you to then attach callbacks that can run once the value becomes available (known as *resolving*),
 	or if an error has occurred (known as *rejecting*).
+
+	@ignore
 
 	@class Promise
 	@__index prototype
@@ -906,11 +910,7 @@ function Promise.each(list, predicate)
 					return reject(Error.new({
 						error = "Promise is cancelled",
 						kind = Error.Kind.AlreadyCancelled,
-						context = string.format(
-							"The Promise that was part of the array at index %d passed into Promise.each was already cancelled when Promise.each began.\n\nThat Promise was created at:\n\n%s",
-							index,
-							value._source
-						),
+						context = string.format("The Promise that was part of the array at index %d passed into Promise.each was already cancelled when Promise.each began.\n\nThat Promise was created at:\n\n%s", index, value._source),
 					}))
 				elseif value:getStatus() == Promise.Status.Rejected then
 					cancel()
@@ -981,11 +981,7 @@ function Promise.is(object)
 	elseif objectMetatable == nil then
 		-- No metatable, but we should still chain onto tables with andThen methods
 		return isCallable(object.andThen)
-	elseif
-		type(objectMetatable) == "table"
-		and type(rawget(objectMetatable, "__index")) == "table"
-		and isCallable(rawget(rawget(objectMetatable, "__index"), "andThen"))
-	then
+	elseif type(objectMetatable) == "table" and type(rawget(objectMetatable, "__index")) == "table" and isCallable(rawget(rawget(objectMetatable, "__index"), "andThen")) then
 		-- Maybe this came from a different or older Promise library.
 		return true
 	end
@@ -1185,11 +1181,7 @@ function Promise.prototype:timeout(seconds, rejectionValue)
 			return Promise.reject(rejectionValue == nil and Error.new({
 				kind = Error.Kind.TimedOut,
 				error = "Timed out",
-				context = string.format(
-					"Timeout of %d seconds exceeded.\n:timeout() called at:\n\n%s",
-					seconds,
-					traceback
-				),
+				context = string.format("Timeout of %d seconds exceeded.\n:timeout() called at:\n\n%s", seconds, traceback),
 			}) or rejectionValue)
 		end),
 		self,
@@ -1622,9 +1614,7 @@ function Promise.prototype:awaitStatus()
 			end)
 			-- The finally promise can propagate rejections, so we attach a catch handler to prevent the unhandled
 			-- rejection warning from appearing
-			:catch(
-				function() end
-			)
+			:catch(function() end)
 
 		coroutine.yield()
 	end
@@ -1736,10 +1726,7 @@ function Promise.prototype:_resolve(...)
 	if Promise.is((...)) then
 		-- Without this warning, arguments sometimes mysteriously disappear
 		if select("#", ...) > 1 then
-			local message = string.format(
-				"When returning a Promise from andThen, extra arguments are " .. "discarded! See:\n\n%s",
-				self._source
-			)
+			local message = string.format("When returning a Promise from andThen, extra arguments are " .. "discarded! See:\n\n%s", self._source)
 			warn(message)
 		end
 
@@ -1763,10 +1750,7 @@ function Promise.prototype:_resolve(...)
 				return self:_reject(maybeRuntimeError:extend({
 					error = "This Promise was chained to a Promise that errored.",
 					trace = "",
-					context = string.format(
-						"The Promise at:\n\n%s\n...Rejected because it was chained to the following Promise, which encountered an error:\n",
-						self._source
-					),
+					context = string.format("The Promise at:\n\n%s\n...Rejected because it was chained to the following Promise, which encountered an error:\n", self._source),
 				}))
 			end
 
