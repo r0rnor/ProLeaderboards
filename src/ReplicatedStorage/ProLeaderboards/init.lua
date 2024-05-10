@@ -2,8 +2,8 @@
 
 ----------------------------------------------------------------------
 --						ProLeaderboards module						--
---						by r0rnor (discord)						--
---	github & docs link: "https://github.com/r0rnor/ProLeaderboards"	--											--
+--						by r0rnor (discord)							--
+--	github & docs link: "https://github.com/r0rnor/ProLeaderboards"	--											
 --																	--
 --	  This module helps creating data stores which are resetting	--
 --	    every N seconds (or even are not resetting, this is in		--
@@ -45,7 +45,7 @@ export type Pages = {
 	[number] : Page
 }
 
-export type Page = {
+export type LeadersList = {
 	[number] : {
 		key : string,
 		value : number
@@ -74,16 +74,16 @@ local metaPageSettings = {
 }
 
 local function connectResetting(self : Leaderboard)
-	local function resetStore(storeKey : string, dataStore : TemporaryDataStore)
-		local timeIndex = math.floor(os.time() / dataStore.resetTime)
-		local previousTimeIndex = math.floor((os.time() - dataStore.resetTime) / dataStore.resetTime)
+	local function resetStore(storeKey : string, temporaryDataStore : TemporaryDataStore)
+		local timeIndex = math.floor(os.time() / temporaryDataStore.resetTime)
+		local previousTimeIndex = math.floor((os.time() - temporaryDataStore.resetTime) / temporaryDataStore.resetTime)
 
 		if previousTimeIndex ~= timeIndex then
 			self.leaderboardReset:Fire(storeKey, timeIndex, previousTimeIndex)
 		end
 
-		dataStore.timeUntilReset = dataStore.resetTime
-		dataStore.dataStore = DataStoreService:GetOrderedDataStore(self.globalKey..storeKey, timeIndex)
+		temporaryDataStore.timeUntilReset = temporaryDataStore.resetTime
+		temporaryDataStore.dataStore = DataStoreService:GetOrderedDataStore(self.globalKey..storeKey, timeIndex)
 	end
 
 	local currentTime = 0
@@ -111,7 +111,20 @@ end
 
 
 local ProLeaderboards = {}
-ProLeaderboards.__index = ProLeaderboards
+ProLeaderboards.__index = function(self : Leaderboard, key : string)
+	if
+		typeof(ProLeaderboards[key]) ~= "function"
+		or key == "new"
+	then
+		return ProLeaderboards[key]
+	end
+
+	if self.promise then
+		return Promise.promisify(ProLeaderboards[key])
+	else
+		return ProLeaderboards[key]
+	end
+end
 
 ProLeaderboards.leaderboardReset = Signal.new()
 ProLeaderboards.timeUpdated = Signal.new()
@@ -146,6 +159,7 @@ function ProLeaderboards.new(promise : boolean, globalKey : string, pageSettings
 	return self
 end
 
+
 --[=[
 	@within ProLeaderboards
 	@method addDataStore
@@ -163,23 +177,15 @@ function ProLeaderboards:addTemporaryDataStore(storeKey : string, resetTime : nu
 
 	local self : Leaderboard = self
 
-	local function newDataStore()
-		local temporaryDataStore : TemporaryDataStore = {}
-		local timeIndex = math.floor(os.time() / resetTime)
-	
-		temporaryDataStore.pageSettings = setmetatable(pageSettings or self.pageSettings, metaPageSettings)
-		temporaryDataStore.resetTime = resetTime
-		temporaryDataStore.timeUntilReset = 0
-		temporaryDataStore.dataStore = DataStoreService:GetOrderedDataStore(self.globalKey..storeKey, timeIndex)
-	
-		self.dictionaryOfTemporaryDataStores[storeKey] = temporaryDataStore
-	end
+	local temporaryDataStore : TemporaryDataStore = {}
+	local timeIndex = math.floor(os.time() / resetTime)
 
-	if not self.promise then
-		return newDataStore()
-	else
-		return Promise.try(newDataStore)
-	end
+	temporaryDataStore.pageSettings = setmetatable(pageSettings or self.pageSettings, metaPageSettings)
+	temporaryDataStore.resetTime = resetTime
+	temporaryDataStore.timeUntilReset = 0
+	temporaryDataStore.dataStore = DataStoreService:GetOrderedDataStore(self.globalKey..storeKey, timeIndex)
+
+	self.dictionaryOfTemporaryDataStores[storeKey] = temporaryDataStore
 end
 
 --[=[
@@ -198,37 +204,25 @@ function ProLeaderboards:set(key : string, value : number)
 
 	local self : Leaderboard = self
 
-	local function updateTimeDataStore(temporaryDataStore : TemporaryDataStore, key : string, deltaValue : number)
-		temporaryDataStore.dataStore:UpdateAsync(key, function(timeOldValue)
-			return if timeOldValue then deltaValue + timeOldValue else deltaValue
-		end)
-	end
-
-	local function updateTimeDataStores(deltaValue : number, key : string)
+	local function updateTemporaryDataStores(deltaValue : number, key : string)
 		for _, temporaryDataStore in self.dictionaryOfTemporaryDataStores do
-			updateTimeDataStore(temporaryDataStore, key, deltaValue)
+			temporaryDataStore.dataStore:UpdateAsync(key, function(timeOldValue)
+				return if timeOldValue then deltaValue + timeOldValue else deltaValue
+			end)
 		end
 	end
 
-	local function updateDataStores()
-		self.allTimeDataStore:UpdateAsync(key, function(oldValue)
-			oldValue = oldValue or 0
-	
-			local deltaValue = math.max(value - oldValue, 0)
-	
-			coroutine.wrap(function()
-				updateTimeDataStores(deltaValue, key)
-			end)()
-	
-			return value
-		end)
-	end
-	
-	if not self.promise then
-		return updateDataStores()
-	else
-		return Promise.try(updateDataStores)
-	end
+	self.allTimeDataStore:UpdateAsync(key, function(oldValue)
+		oldValue = oldValue or 0
+
+		local deltaValue = math.max(value - oldValue, 0)
+
+		coroutine.wrap(function()
+			updateTemporaryDataStores(deltaValue, key)
+		end)()
+
+		return value
+	end)
 end
 
 --[=[
@@ -245,7 +239,7 @@ end
 	which contains key (user ID of player) and value (value, which was saved)
 ]=]
 
-function ProLeaderboards:getPages(storeKey : string?, numberOfPages : number?) : Pages | Page
+function ProLeaderboards:getPages(storeKey : string?, numberOfPages : number?) : {[number] : LeadersList} | LeadersList
 	local self : Leaderboard = self
 	
 	local dataStore = if not storeKey then self.allTimeDataStore else self.dictionaryOfTemporaryDataStores[storeKey].dataStore
@@ -257,33 +251,22 @@ function ProLeaderboards:getPages(storeKey : string?, numberOfPages : number?) :
 	local pageIndex = 1
 	local rank = 0
 
-	local function insertList(Entries : {})
+	repeat
+		local Entries = pages:GetCurrentPage()
+		resultPages[pageIndex] = {}
+
 		for _, Entry in pairs(Entries) do
 			rank += 1
 			resultPages[pageIndex][rank] = Entry
 		end
-	end
 
-	local function loopThroughPages()
-		repeat
-			local Entries = pages:GetCurrentPage()
-			resultPages[pageIndex] = {}
-	
-			insertList(Entries)
-	
-			if not pages.IsFinished then
-				pages:AdvanceToNextPageAsync() pageIndex += 1
-			end
-		until pages.IsFinished or pageIndex > numberOfPages
+		if not pages.IsFinished then
+			pages:AdvanceToNextPageAsync()
+			pageIndex += 1
+		end
+	until pages.IsFinished or pageIndex > numberOfPages
 
-		return if numberOfPages ~= 1 then resultPages else resultPages[1]
-	end
-
-	if not self.promise then
-		return loopThroughPages()
-	else
-		return Promise.try(loopThroughPages)
-	end
+	return if numberOfPages ~= 1 then resultPages else resultPages[1]
 end
 
 --[=[
@@ -297,38 +280,27 @@ end
 	Return dictionary whose key is Data Store key and whose value is :getPages() runned over it
 ]=]
 
-function ProLeaderboards:getDictionaryOfDataStores(numberOfPages : number?)
+function ProLeaderboards:getDictionaryOfDataStores(numberOfPages : number?) : {[string] : {[number] : LeadersList} | LeadersList}
 	local self : Leaderboard = self
+	local dictionaryOfDataStores = {}
 
-	local function getDictionaryOfDataStores()
-		local dictionaryOfDataStores = {}
-
-		for storeKey, _ in self.dictionaryOfTemporaryDataStores do
-			if not self.promise then
-				dictionaryOfDataStores[storeKey] = self:getPages(storeKey, numberOfPages)
-			else
-				self:getPages(storeKey, numberOfPages):andThen(function(pages : Pages | Page)
-					dictionaryOfDataStores[storeKey] = pages
-				end)
-			end
-		end
-	
+	for storeKey, _ in self.dictionaryOfTemporaryDataStores do
 		if not self.promise then
-			dictionaryOfDataStores["all-time"] = self:getPages(nil, numberOfPages)
+			dictionaryOfDataStores[storeKey] = self:getPages(storeKey, numberOfPages)
 		else
-			self:getPages(nil, numberOfPages):andThen(function(pages : Pages | Page)
-				dictionaryOfDataStores["all-time"] = pages
-			end)
+			local _, pages = self:getPages(storeKey, numberOfPages):await()
+			dictionaryOfDataStores[storeKey] = pages
 		end
-	
-		return dictionaryOfDataStores
 	end
 
 	if not self.promise then
-		return getDictionaryOfDataStores()
+		dictionaryOfDataStores["all-time"] = self:getPages(nil, numberOfPages)
 	else
-		return Promise.try(getDictionaryOfDataStores)
+		local _, pages = self:getPages(nil, numberOfPages):await()
+		dictionaryOfDataStores["all-time"] = pages
 	end
+
+	return dictionaryOfDataStores
 end
 
 
