@@ -107,7 +107,7 @@ local Promise = require(script.Promise)
 
 
 export type Leaderboard = {
-	storeKey : string,
+	globalKey : string,
 	pageSettings : PageSettings,
 	allTimeDataStore : OrderedDataStore,
 	dictionaryOfTemporaryDataStores : {
