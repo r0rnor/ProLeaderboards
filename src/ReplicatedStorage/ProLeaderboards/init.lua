@@ -15,7 +15,7 @@
 --[=[
 	@class ProLeaderboards
 
-	Test
+	Module which helps with creating OrderedDataStores which resets periodically. Also creates all-time data store
 ]=]
 
 
@@ -26,6 +26,109 @@ local RunService = game:GetService("RunService")
 local Signal = require(script.Signal)
 local Promise = require(script.Promise)
 
+
+--[=[
+	@within ProLeaderboards
+	@interface Leaderboard
+	.storeKey string -- first part of data store key
+	.pageSettings PageSettings
+	.allTimeDataStore OrderedDataStore
+	.dictionaryOfTemporaryDataStores {[string] : TemporaryDataStore}
+	.leaderboardReset RBXScriptSignal
+	.timeUpdated RBXScriptSignal
+
+	Main object of this module.
+
+	```lua
+	local leaderboard = ProLeaderboards.new(false, "Power")
+	leaderboard:addDataStore("daily", 24 * 60^2)
+	leaderboard:addDataStore("weekly", 7 * 24 * 60^2)
+	
+	while wait(30) do
+		for _, player in Players:GetPlayers() do
+			leaderboard:set(player.Power.Value)
+		end
+
+		for dataStoreKey, page in pairs(leaderboard:getDictionaryOfDataStores()) do
+			for rank, playerInfo in ipairs(page) do
+				local userId = playerInfo.key
+				local powerValue = playerInfo.value
+
+				print(dataStoreKey.." has "..userId.." player, which have "..powerValue.." power")
+			end
+		end
+	end
+	```
+
+	This example creates a daily, weekly and all-time (by default) leaderboards.
+	Every 30 seconds these leaderboards are updating, and then script prints leaders of this data stores and their amount of power
+]=]
+
+--[=[
+	@within ProLeaderboards
+	@prop leaderboardReset RBXScriptSignal
+	@tag Event
+	@tag Leaderboard Class
+
+	This event fires when any temporary data store resets.
+	Returns TemporaryDataStore key, which was reset, current TemporaryDataStore version index, and previous TemporaryDataStore version index
+
+	```lua
+	local leaderboard = ProLeaderboards.new(false, "Coins")
+	leaderboard:addDataStore("daily", 24 * 60^2)
+
+	leaderboard.leaderboardReset:Connect(function(temporaryDataStoreKey, currentVersion, previousVersion)
+		print(temporaryDataStoreKey.." updated from "..previousVersion.." version to "..currentVersion)
+	end)
+	```
+
+	This example creates a simple daily leaderboard. There is event, which fires when this daily leaderboard resets (every 24h) and prints it's name, previousVersion and currentVersion
+]=]
+
+--[=[
+	@within ProLeaderboards
+	@prop timeUpdated RBXScriptSignal
+	@tag Event
+	@tag Leaderboard Class
+
+	This event fires every ≈1 second. Returns TemporaryDataStore key, which was updated and returns seconds till reset of this leaderboard
+
+	```lua
+	local leaderboard = ProLeaderboards.new(false, "Coins")
+	leaderboard:addDataStore("daily", 24 * 60^2)
+	leaderboard:addDataStore("hourly", 60^2)
+
+	leaderboard.timeUpdated:Connect(function(temporaryDataStoreKey, timeUntilReset)
+		print(temporaryDataStore.. " will reset in ".. timeUntilReset.. " seconds!")
+	end)
+	```
+
+]=]
+
+
+export type Leaderboard = {
+	storeKey : string,
+	pageSettings : PageSettings,
+	allTimeDataStore : OrderedDataStore,
+	dictionaryOfTemporaryDataStores : {
+		[string] : TemporaryDataStore
+	},
+
+	leaderboardReset : RBXScriptSignal,
+	timeUpdated : RBXScriptSignal,
+}
+
+--[=[
+	@interface PageSettings
+	@within ProLeaderboards
+	.ascending bool -- Is data in pages will be ascending or descending
+	.pageSize number -- Determines to what rank the dictionary will be
+	.minValue number? -- The minimum amount required to enter the dictionary
+	.maxValue number? -- The maximum amount required to enter the dictionary
+
+	Settings for pages you are obtaining on calling :getPage() or :getDictionaryOfDataStores.
+
+]=]
 
 export type PageSettings = {
 	ascending : boolean,
@@ -41,27 +144,11 @@ export type TemporaryDataStore = {
 	timeUntilReset : number
 }
 
-export type Pages = {
-	[number] : Page
-}
-
-export type LeadersList = {
+export type Page = {
 	[number] : {
 		key : string,
 		value : number
 	}
-}
-
-export type Leaderboard = {
-	storeKey : string,
-	pageSettings : PageSettings,
-	allTimeDataStore : OrderedDataStore,
-	dictionaryOfTemporaryDataStores : {
-		[string] : TemporaryDataStore
-	},
-
-	leaderboardReset : RBXScriptSignal,
-	timeUpdated : RBXScriptSignal,
 }
 
 
@@ -140,6 +227,8 @@ ProLeaderboards.timeUpdated = Signal.new()
 
 	@return Leaderboard
 
+	@tag Leaderboard
+
 	Constructs a new Leaderboard (class)
 ]=]
 
@@ -168,7 +257,7 @@ end
 	@param resetTime number
 	@param pageSettings PageSettings?
 
-	Adding a temporaryDataStore that resets every <resetTime> seconds
+	Adding a temporaryDataStore with [storeKey] key that resets every [resetTime] seconds
 ]=]
 
 function ProLeaderboards:addTemporaryDataStore(storeKey : string, resetTime : number, pageSettings : PageSettings?)
@@ -227,82 +316,130 @@ end
 
 --[=[
 	@within ProLeaderboards
-	@method getPages
+	@method getPage
 
 	@param storeKey string?
-	@param numberOfPages number?
 
-	@return Page | {[number] : Page}
+	@return Page
 
-	Return pages (if numberOfPages ~= nil or > 1) or page (if numberOfPages == nil or ==1).
+	Return page of data store, which storeKey given. If storeKey == nil, then return page of all-time dataStore
 	Page is dictionary, whose key is number (rank of a player) and value is another table,
 	which contains key (user ID of player) and value (value, which was saved)
 ]=]
 
-function ProLeaderboards:getPages(storeKey : string?, numberOfPages : number?) : {[number] : LeadersList} | LeadersList
+function ProLeaderboards:getPage(storeKey : string?) : Page
 	local self : Leaderboard = self
 	
 	local dataStore = if not storeKey then self.allTimeDataStore else self.dictionaryOfTemporaryDataStores[storeKey].dataStore
 	local pageSettings = if not storeKey then self.pageSettings else self.dictionaryOfTemporaryDataStores[storeKey].pageSettings
-	local numberOfPages = numberOfPages or 1
-
 	local pages = dataStore:GetSortedAsync(pageSettings.ascending, pageSettings.pageSize, pageSettings.minValue, pageSettings.maxValue)
-	local resultPages : Pages = {}
-	local pageIndex = 1
-	local rank = 0
 
-	repeat
-		local Entries = pages:GetCurrentPage()
-		resultPages[pageIndex] = {}
-
-		for _, Entry in pairs(Entries) do
-			rank += 1
-			resultPages[pageIndex][rank] = Entry
-		end
-
-		if not pages.IsFinished then
-			pages:AdvanceToNextPageAsync()
-			pageIndex += 1
-		end
-	until pages.IsFinished or pageIndex > numberOfPages
-
-	return if numberOfPages ~= 1 then resultPages else resultPages[1]
+	return pages:GetCurrentPage()
 end
 
 --[=[
 	@within ProLeaderboards
-	@method getData
+	@method getDictionaryOfDataStores
 
-	@param numberOfPages number?
+	@param storeKey string?
 
-	@return {[string] : Page | {[number] : Page}} 
+	@return {[string] : Page} 
 
-	Return dictionary whose key is Data Store key and whose value is :getPages() runned over it
+	Return dictionary whose key is dataStore key and whose value is :getPage() runned over it
 ]=]
 
-function ProLeaderboards:getDictionaryOfDataStores(numberOfPages : number?) : {[string] : {[number] : LeadersList} | LeadersList}
+function ProLeaderboards:getDictionaryOfDataStores() : {[string] : Page}
 	local self : Leaderboard = self
 	local dictionaryOfDataStores = {}
 
 	for storeKey, _ in self.dictionaryOfTemporaryDataStores do
 		if not self.promise then
-			dictionaryOfDataStores[storeKey] = self:getPages(storeKey, numberOfPages)
+			dictionaryOfDataStores[storeKey] = self:getPage(storeKey)
 		else
-			local _, pages = self:getPages(storeKey, numberOfPages):await()
+			local _, pages = self:getPage(storeKey):await()
 			dictionaryOfDataStores[storeKey] = pages
 		end
 	end
 
 	if not self.promise then
-		dictionaryOfDataStores["all-time"] = self:getPages(nil, numberOfPages)
+		dictionaryOfDataStores["all-time"] = self:getPage()
 	else
-		local _, pages = self:getPages(nil, numberOfPages):await()
+		local _, pages = self:getPage():await()
 		dictionaryOfDataStores["all-time"] = pages
 	end
 
 	return dictionaryOfDataStores
 end
 
+
+--[=[
+	@within ProLeaderboards
+	@method getDataByKey
+
+	@param lostKey string
+	@param storeKey string?
+
+	@return (number, number)
+
+
+]=]
+
+
+function ProLeaderboards:getDataByKey(lostKey : string, storeKey : string?) : (number, number)
+	local dataStore = if not storeKey then self.allTimeDataStore else self.dictionaryOfTemporaryDataStores[storeKey].dataStore
+	local pageSettings = if not storeKey then self.pageSettings else self.dictionaryOfTemporaryDataStores[storeKey].pageSettings
+	local pages = dataStore:GetSortedAsync(pageSettings.ascending, pageSettings.pageSize, pageSettings.minValue, pageSettings.maxValue)
+	local pageIndex = 0
+
+	local function getRankByKey() : number | nil
+		local page = pages:GetCurrentPage()
+	
+		pageIndex += 1
+
+		for rank : number, rankInfo : {key : string, value : number} in ipairs(page) do
+			if tostring(rankInfo.key) == tostring(lostKey) then
+				return rank + (pageIndex - 1) * #page, rankInfo.value
+			end
+		end
+
+		if pages.IsFinished then
+			return nil, nil
+		else
+			pages:AdvanceToNextPageAsync()
+		end
+
+		wait()
+	
+		return getRankByKey()
+	end
+
+	return getRankByKey()
+end
+
+
+
+function ProLeaderboards:getDictionaryOfDataByKey(lostKey : string)
+	local self : Leaderboard = self
+	local dictionaryOfRanks = {}
+
+	for storeKey, _ in self.dictionaryOfTemporaryDataStores do
+		if not self.promise then
+			dictionaryOfRanks[storeKey] = self:getRank(lostKey, storeKey)
+		else
+			local _, rank = self:getRank(lostKey, storeKey):await()
+			dictionaryOfRanks[storeKey] = rank
+		end
+	end
+
+	if not self.promise then
+		dictionaryOfRanks["all-time"] = self:getRank(lostKey)
+	else
+		local _, rank = self:getRank(lostKey):await()
+		dictionaryOfRanks["all-time"] = rank
+	end
+
+	return dictionaryOfRanks
+end
 
 
 return ProLeaderboards
