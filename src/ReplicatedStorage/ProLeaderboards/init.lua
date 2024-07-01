@@ -1,109 +1,10 @@
--- stylua: ignore start
-
-----------------------------------------------------------------------
---						ProLeaderboards module						--
---						by r0rnor (discord)							--
---	github & docs link: "https://github.com/r0rnor/ProLeaderboards"	--											
---																	--
---	  This module helps creating data stores which are resetting	--
---	    every N seconds (or even are not resetting, this is in		--
--- all-time data store case). You can use this module for creating, --
---	    for example, hourly/daily/monthly/all-time leaderboards		--
---				(P.S. this is my first public module)				--
-----------------------------------------------------------------------
-
---[=[
-	@class ProLeaderboards
-
-	Module which helps with creating OrderedDataStores which resets periodically. Also creates all-time data store
-]=]
-
-
+--stylua: ignore start
 local DataStoreService = game:GetService("DataStoreService")
 local RunService = game:GetService("RunService")
 
 
 local Signal = require(script.Signal)
 local Promise = require(script.Promise)
-
-
---[=[
-	@within ProLeaderboards
-	@interface Leaderboard
-	.storeKey string -- first part of data store key
-	.pageSettings PageSettings
-	.allTimeDataStore OrderedDataStore
-	.dictionaryOfTemporaryDataStores {[string] : TemporaryDataStore}
-	.leaderboardReset RBXScriptSignal
-	.timeUpdated RBXScriptSignal
-
-	Main object of this module.
-
-	```lua
-	local leaderboard = ProLeaderboards.new(false, "Power")
-	leaderboard:addDataStore("daily", 24 * 60^2)
-	leaderboard:addDataStore("weekly", 7 * 24 * 60^2)
-	
-	while wait(30) do
-		for _, player in Players:GetPlayers() do
-			leaderboard:set(player.Power.Value)
-		end
-
-		for dataStoreKey, page in pairs(leaderboard:getDictionaryOfDataStores()) do
-			for rank, playerInfo in ipairs(page) do
-				local userId = playerInfo.key
-				local powerValue = playerInfo.value
-
-				print(dataStoreKey.." has "..userId.." player, which have "..powerValue.." power")
-			end
-		end
-	end
-	```
-
-	This example creates a daily, weekly and all-time (by default) leaderboards.
-	Every 30 seconds these leaderboards are updating, and then script prints leaders of this data stores and their amount of power
-]=]
-
---[=[
-	@within ProLeaderboards
-	@prop leaderboardReset RBXScriptSignal
-	@tag Event
-	@tag Leaderboard Class
-
-	This event fires when any temporary data store resets.
-	Returns TemporaryDataStore key, which was reset, current TemporaryDataStore version index, and previous TemporaryDataStore version index
-
-	```lua
-	local leaderboard = ProLeaderboards.new(false, "Coins")
-	leaderboard:addDataStore("daily", 24 * 60^2)
-
-	leaderboard.leaderboardReset:Connect(function(temporaryDataStoreKey, currentVersion, previousVersion)
-		print(temporaryDataStoreKey.." updated from "..previousVersion.." version to "..currentVersion)
-	end)
-	```
-
-	This example creates a simple daily leaderboard. There is event, which fires when this daily leaderboard resets (every 24h) and prints it's name, previousVersion and currentVersion
-]=]
-
---[=[
-	@within ProLeaderboards
-	@prop timeUpdated RBXScriptSignal
-	@tag Event
-	@tag Leaderboard Class
-
-	This event fires every ≈1 second. Returns TemporaryDataStore key, which was updated and returns seconds till reset of this leaderboard
-
-	```lua
-	local leaderboard = ProLeaderboards.new(false, "Coins")
-	leaderboard:addDataStore("daily", 24 * 60^2)
-	leaderboard:addDataStore("hourly", 60^2)
-
-	leaderboard.timeUpdated:Connect(function(temporaryDataStoreKey, timeUntilReset)
-		print(temporaryDataStore.. " will reset in ".. timeUntilReset.. " seconds!")
-	end)
-	```
-
-]=]
 
 
 export type Leaderboard = {
@@ -117,18 +18,6 @@ export type Leaderboard = {
 	leaderboardReset : RBXScriptSignal,
 	timeUpdated : RBXScriptSignal,
 }
-
---[=[
-	@interface PageSettings
-	@within ProLeaderboards
-	.ascending bool -- Is data in pages will be ascending or descending
-	.pageSize number -- Determines to what rank the dictionary will be
-	.minValue number? -- The minimum amount required to enter the dictionary
-	.maxValue number? -- The maximum amount required to enter the dictionary
-
-	Settings for pages you are obtaining on calling :getPage() or :getDictionaryOfDataStores.
-
-]=]
 
 export type PageSettings = {
 	ascending : boolean,
@@ -152,6 +41,7 @@ export type Page = {
 }
 
 
+local ProLeaderboards = {}
 local metaPageSettings = {
 	__index = {
 		ascending = false,
@@ -160,19 +50,38 @@ local metaPageSettings = {
 	}
 }
 
-local function connectResetting(self : Leaderboard)
-	local function resetStore(storeKey : string, temporaryDataStore : TemporaryDataStore)
-		local timeIndex = math.floor(os.time() / temporaryDataStore.resetTime)
-		local previousTimeIndex = math.floor((os.time() - temporaryDataStore.resetTime) / temporaryDataStore.resetTime)
+local function resetStoreIfTimeEqualsToZero(self : Leaderboard, storeKey : string)
+	local temporaryDataStore = self.dictionaryOfTemporaryDataStores[storeKey]
+	local timeIndex = math.floor(os.time() / temporaryDataStore.resetTime)
+	local previousTimeIndex = math.floor((os.time() - temporaryDataStore.resetTime) / temporaryDataStore.resetTime)
 
-		if previousTimeIndex ~= timeIndex then
-			self.leaderboardReset:Fire(storeKey, timeIndex, previousTimeIndex)
-		end
-
-		temporaryDataStore.timeUntilReset = temporaryDataStore.resetTime
-		temporaryDataStore.dataStore = DataStoreService:GetOrderedDataStore(self.globalKey..storeKey, timeIndex)
+	if temporaryDataStore.timeUntilReset > 0 then
+		return
 	end
 
+	if previousTimeIndex ~= timeIndex then
+		self.leaderboardReset:Fire(storeKey, timeIndex, previousTimeIndex)
+	end
+
+	temporaryDataStore.timeUntilReset = temporaryDataStore.resetTime
+	temporaryDataStore.dataStore = DataStoreService:GetOrderedDataStore(self.globalKey..storeKey, timeIndex)
+end
+
+local function decreaseTimeOfTemporaryDataStore(self : Leaderboard, storeKey : string, currentTime : number)
+	local temporaryDataStore = self.dictionaryOfTemporaryDataStores[storeKey]
+	
+	temporaryDataStore.timeUntilReset = math.max(temporaryDataStore.timeUntilReset - currentTime, 0)
+	self.timeUpdated:Fire(storeKey, temporaryDataStore.timeUntilReset)
+end
+
+local function decreaseTimeOfAllTemporaryDataStores(self : Leaderboard, currentTime : number)
+	for storeKey, _ in self.dictionaryOfTemporaryDataStores do
+		decreaseTimeOfTemporaryDataStore(self, storeKey, currentTime)
+		resetStoreIfTimeEqualsToZero(self, storeKey)
+	end
+end
+
+local function decreaseTimeOfTemporaryDataStoresEverySecond(self : Leaderboard)
 	local currentTime = 0
 	RunService.Heartbeat:Connect(function(deltaTime)
 		currentTime += deltaTime
@@ -181,60 +90,22 @@ local function connectResetting(self : Leaderboard)
 			return
 		end
 
-		for storeKey, temporaryDataStore in self.dictionaryOfTemporaryDataStores do
-			temporaryDataStore.timeUntilReset = math.max(temporaryDataStore.timeUntilReset - currentTime, 0)
-			self.timeUpdated:Fire(storeKey, temporaryDataStore.timeUntilReset)
-
-			if temporaryDataStore.timeUntilReset > 0 then
-				continue
-			end
-
-			resetStore(storeKey, temporaryDataStore)
-		end
-
+		decreaseTimeOfAllTemporaryDataStores(self, currentTime)
 		currentTime = 0
 	end)
 end
 
+local function getPromisedOrDefaultFunction(self : Leaderboard, key : string)
+	local indexedFunction = ProLeaderboards[key]
 
-local ProLeaderboards = {}
-ProLeaderboards.__index = function(self : Leaderboard, key : string)
-	if
-		typeof(ProLeaderboards[key]) ~= "function"
-		or key == "new"
-	then
-		return ProLeaderboards[key]
+	if typeof(indexedFunction) ~= "function" or not self.promise then
+		return indexedFunction
 	end
 
-	if self.promise then
-		return Promise.promisify(ProLeaderboards[key])
-	else
-		return ProLeaderboards[key]
-	end
+	return Promise.promisify(indexedFunction)
 end
 
-ProLeaderboards.leaderboardReset = Signal.new()
-ProLeaderboards.timeUpdated = Signal.new()
-
-
---[=[
-	@within ProLeaderboards
-	@function new
-
-	@param promise bool
-	@param globalKey string
-	@param pageSettings PageSettings?
-
-	@return Leaderboard
-
-	@tag Leaderboard
-
-	Constructs a new Leaderboard (class)
-]=]
-
-function ProLeaderboards.new(promise : boolean, globalKey : string, pageSettings : PageSettings?) : Leaderboard
-	assert(globalKey, "Global key is not provided to .new()")
-	
+local function createLeaderboard(promise : boolean, globalKey : string, pageSettings : PageSettings?) : Leaderboard
 	local self : Leaderboard = setmetatable({}, ProLeaderboards)
 
 	self.pageSettings = setmetatable(pageSettings or {}, metaPageSettings)
@@ -243,54 +114,39 @@ function ProLeaderboards.new(promise : boolean, globalKey : string, pageSettings
 	self.allTimeDataStore = DataStoreService:GetOrderedDataStore(self.globalKey.."All-Time", 1)
 	self.dictionaryOfTemporaryDataStores = {}
 
-	connectResetting(self)
+	return self
+end
+
+
+ProLeaderboards.__index = getPromisedOrDefaultFunction
+ProLeaderboards.leaderboardReset = Signal.new()
+ProLeaderboards.timeUpdated = Signal.new()
+
+
+function ProLeaderboards.new(promise : boolean, globalKey : string, pageSettings : PageSettings?) : Leaderboard
+	local self = createLeaderboard(promise, globalKey, pageSettings)
+	decreaseTimeOfTemporaryDataStoresEverySecond(self)
 
 	return self
 end
 
 
---[=[
-	@within ProLeaderboards
-	@method addDataStore
-
-	@param storeKey string
-	@param resetTime number
-	@param pageSettings PageSettings?
-
-	Adding a temporaryDataStore with [storeKey] key that resets every [resetTime] seconds
-]=]
-
 function ProLeaderboards:addTemporaryDataStore(storeKey : string, resetTime : number, pageSettings : PageSettings?)
-	assert(storeKey, "Store key is not provided to :addTemporaryDataStore()")
-	assert(resetTime, "Reset time of data store is not provided to :addTemporaryDataStore()")
-
 	local self : Leaderboard = self
 
 	local temporaryDataStore : TemporaryDataStore = {}
 	local timeIndex = math.floor(os.time() / resetTime)
 
+	temporaryDataStore.dataStore = DataStoreService:GetOrderedDataStore(self.globalKey..storeKey, timeIndex)
 	temporaryDataStore.pageSettings = setmetatable(pageSettings or self.pageSettings, metaPageSettings)
 	temporaryDataStore.resetTime = resetTime
 	temporaryDataStore.timeUntilReset = 0
-	temporaryDataStore.dataStore = DataStoreService:GetOrderedDataStore(self.globalKey..storeKey, timeIndex)
 
 	self.dictionaryOfTemporaryDataStores[storeKey] = temporaryDataStore
 end
 
---[=[
-	@within ProLeaderboards
-	@method set
-
-	@param key string
-	@param value number
-
-	Updates leaderboards
-]=]
 
 function ProLeaderboards:set(key : string, value : number)
-	assert(key, "Key is not provided to :set()")
-	assert(value, "Value is not provided to :set()")
-
 	local self : Leaderboard = self
 
 	local function updateTemporaryDataStores(deltaValue : number, key : string)
@@ -314,22 +170,9 @@ function ProLeaderboards:set(key : string, value : number)
 	end)
 end
 
---[=[
-	@within ProLeaderboards
-	@method getPage
-
-	@param storeKey string?
-
-	@return Page
-
-	Return page of data store, which storeKey given. If storeKey == nil, then return page of all-time dataStore
-	Page is dictionary, whose key is number (rank of a player) and value is another table,
-	which contains key (user ID of player) and value (value, which was saved)
-]=]
 
 function ProLeaderboards:getPage(storeKey : string?) : Page
 	local self : Leaderboard = self
-	
 	local dataStore = if not storeKey then self.allTimeDataStore else self.dictionaryOfTemporaryDataStores[storeKey].dataStore
 	local pageSettings = if not storeKey then self.pageSettings else self.dictionaryOfTemporaryDataStores[storeKey].pageSettings
 	local pages = dataStore:GetSortedAsync(pageSettings.ascending, pageSettings.pageSize, pageSettings.minValue, pageSettings.maxValue)
@@ -337,16 +180,6 @@ function ProLeaderboards:getPage(storeKey : string?) : Page
 	return pages:GetCurrentPage()
 end
 
---[=[
-	@within ProLeaderboards
-	@method getDictionaryOfDataStores
-
-	@param storeKey string?
-
-	@return {[string] : Page} 
-
-	Return dictionary whose key is dataStore key and whose value is :getPage() runned over it
-]=]
 
 function ProLeaderboards:getDictionaryOfDataStores() : {[string] : Page}
 	local self : Leaderboard = self
@@ -370,19 +203,6 @@ function ProLeaderboards:getDictionaryOfDataStores() : {[string] : Page}
 
 	return dictionaryOfDataStores
 end
-
-
---[=[
-	@within ProLeaderboards
-	@method getDataByKey
-
-	@param lostKey string
-	@param storeKey string?
-
-	@return (number, number)
-
-
-]=]
 
 
 function ProLeaderboards:getDataByKey(lostKey : string, storeKey : string?) : (number, number)
