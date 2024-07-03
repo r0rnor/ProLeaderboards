@@ -25,53 +25,63 @@ local PageManager = {}
 PageManager.__index = PageManager
 
 function PageManager.new(leaderboard : Leaderboard) : PageManager
-    local self : PageManager = setmetatable({}, PageSettings.metaPageSettings)
+    local self : PageManager = setmetatable({}, PageManager)
 
     self.leaderboard = leaderboard
 
     return self
 end
 
-function PageManager:getAllPages() : Pages
+function PageManager:getPage(regionalScope : string?) : {[number] : rankInfo}
     local self : PageManager = self
 
-    local pageSettingsArguments = self.pageSettings:convertToArgument()
-    local pages = self.orderedDataStore:GetSortedAsync(table.unpack(pageSettingsArguments))
+    local pages = self:getAllPages(regionalScope)
+    local page = pages:GetCurrentPage()
+
+    return page
+end
+
+function PageManager:getAllPages(regionalScope : string?) : DataStorePages
+    local self : PageManager = self
+
+    local pageSettingsArguments = self.leaderboard.pageSettings:convertToArgument()
+    local orderedDataStore = self.leaderboard:getOrderedDataStore(regionalScope)
+    local pages = orderedDataStore:GetSortedAsync(table.unpack(pageSettingsArguments))
 
     return pages
 end
 
-function PageManager:getValueByKey(key : string) : number
+function PageManager:getValueByKey(key : string, regionalScope : string?) : number
     local self : PageManager = self
 
     local function getValueIfExist(page : PageArray)
         return self:getValueByKeyInPage(page, key)
     end
 
-    local value = self:goThroughAllPagesAndCallFunctionEveryPage(getValueIfExist)
+    local value = self:goThroughAllPagesAndCallFunctionEveryPage(getValueIfExist, regionalScope)
 
 	return value
 end
 
-function PageManager:getRankByKey(key : string) : number
+function PageManager:getRankByKey(key : string, regionalScope : string?) : number
     local self : PageManager = self
 
     local function getRankIfExist(page : PageArray, previousRanks : number)
-        local rankInPage = self:getRankByKey(page, key)
+        local rankInPage = self:getRankByKeyInPage(page, key)
         local rank = rankInPage and rankInPage + previousRanks
 
         return rank
     end
 
-    local rank = self:goThroughAllPagesAndCallFunctionEveryPage(getRankIfExist)
+    local rank = self:goThroughAllPagesAndCallFunctionEveryPage(getRankIfExist, regionalScope)
 
 	return rank
 end
 
-function PageManager:goThroughAllPagesAndCallFunctionEveryPage(functionToCall : (page : PageArray, previousRanks : number) -> ())
+function PageManager:goThroughAllPagesAndCallFunctionEveryPage(functionToCall : (page : PageArray, previousRanks : number) -> (), regionalScope : string?)
     local self : PageManager = self
 
-    local pages = self:getAllPages()
+    local pages = self:getAllPages(regionalScope)
     local pageIndex = 1
     local value
 
@@ -96,7 +106,7 @@ end
 function PageManager:getValueByKeyInPage(page : PageArray, key : string)
     local _, rankInfo = PageManager:getRankAndRankInfoByKeyInPage(page, key)
 
-    return rankInfo
+    return rankInfo.value
 end
 
 function PageManager:getRankByKeyInPage(page : PageArray, key : string)

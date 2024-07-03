@@ -8,16 +8,17 @@ export type PageSettings = {
 }
 
 local PageSettings = {}
-PageSettings.metaPageSettings = {
-	__index = {
-		ascending = false,
-		pageSize = 100,
-		minValue = 0,
-	}
-}
+PageSettings.__index = PageSettings
 
 function PageSettings.new(pageSettings : PageSettings?) : PageSettings
-    local self : PageSettings = setmetatable(pageSettings or {}, PageSettings.metaPageSettings)
+	pageSettings = pageSettings or {}
+
+    local self : PageSettings = setmetatable(pageSettings, PageSettings)
+
+	self.ascending = pageSettings.ascending or false
+	self.pageSize = pageSettings.pageSize or 100
+	self.minValue = pageSettings.minValue or 0
+	self.maxValue = pageSettings.maxValue
 
     return self
 end
